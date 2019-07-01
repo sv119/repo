@@ -1,0 +1,14 @@
+body {
+	background-color: #111;
+	width: 1520px;
+}
+
+svg {
+	margin-top: 6px;
+	border: 2px solid orange;
+	padding: 2px;
+}
+
+li {
+	list-style: none;
+}
