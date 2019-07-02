@@ -2,6 +2,9 @@ var data = [];
 var timemin = 0;
 var timemax = 0;
 
+var from_time = 0;
+var to_time = 0;
+
 var points = [];
 
 $.getJSON("/data/data0.json",function(dataset){
@@ -28,9 +31,12 @@ $.getJSON("/data/data0.json",function(dataset){
 					"id": d.JJDBH, "name": d.AFDD,
 					"road": d.lm + " (" + d.rid +")",
 					"time": d.HRSJ.split(" ")[1],
+					"t": (new Date(d.HRSJ)).getTime(),
 					"date": d.HRSJ_DATE.replace("-0","-").replace("-0","-").replace("-","年 ",1).replace("-","月 ",1) + "日",
 					"temp": d.tqms + "，" + d.wind_direction + " " + d.wind_power});
 	}
+	from_time = timemin;
+	to_time = timemax;
 	// console.log("lng: " + lng_min + " - " + lng_max + ", lat: " + lat_min + " - " + lat_max);
 	// console.log("lng: " + (parseFloat(lng_min)+parseFloat(lng_max))/2 + ", lat: " + (parseFloat(lat_min)+parseFloat(lat_max))/2);
 	//console.log("points: ", points);
@@ -174,9 +180,10 @@ function initSelector() {
 						return height - yScale(d);			//以所绑定数据作为矩形的高
 					})
 					.append("title")
-						.text(function(d,i){
+						.html(function(d,i){
 							return "FROM{" + (new Date(timemin + i * step)).toLocaleString().replace(" ","-")
-							+ "}TO{" + (new Date(timemin + (i+1) * step - 1)).toLocaleString().replace(" ","-") + "}";
+							+ "}TO{" + (new Date(timemin + (i+1) * step - 1)).toLocaleString().replace(" ","-") + "}<br />"
+							+ "报警次数：" + d;
 						});
 
 	//水平基准线
@@ -194,47 +201,16 @@ function initSelector() {
 						.attr("y2", height+20)
 						.attr("style", "stroke: white;");
 	
+	var s_1 = 10;
+	var s_2 = xScale(timemax) + s_1;
+	var defa = 0;
 	var selected = svg.append("rect")
 						.attr("id", "area")
 						.attr("fill","rgba(0,100,220,0.2)")
-						.attr("x", 10)
+						.attr("x", s_1)
 						.attr("y", yScale(datamax*1.6) - 10)
-						.attr("width", xScale(timemax))
-						.attr("height", height-yScale(datamax*1.6))
-						.on("mousedown",function(){
-							var dx = parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x);
-							if (dx>=-10 && dx <=10) {
-								dragging = "left";
-							}
-							else {
-								dx = parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x
-										-d3.select(this).attr("width"));
-								if (dx>=-10 && dx <=10)
-									dragging = "right";
-							}
-							console.log(dragging);
-						})
-						.on("mousemove",function(){
-							if (dragging=="none")
-								return;
-							console.log("moving");
-							var dx = parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x);
-							if (dragging=="left") {
-								d3.select(this).attr("x", dx).attr("width", dx);
-							}
-							else if (dragging=="right") {
-								dx = dx - d3.select(this).attr("x");
-								d3.select(this).attr("width", dx);
-							}
-						})
-						.on("mouseup",function(){
-							console.log("up");
-							dragging = "none";
-						})
-						.on("mouseout",function(){
-							console.log("out");
-							dragging = "none";
-						});
+						.attr("width", s_2 - s_1)
+						.attr("height", height-yScale(datamax*1.6));
 	//时间显示
 	var labeltime = svg.append("text")
 						.attr("x", width+10)
@@ -242,13 +218,101 @@ function initSelector() {
 						.attr("fill", "white")
 						.attr("font-size", "12px")
 						.attr("text-anchor", "end")
-						.text("time");
-	//鼠标跟随
-	svg.on("mousemove",function(){
-		var dx = parseInt(d3.event.pageX-document.getElementById("svg0").getBoundingClientRect().x) - 3;
-		var dy = parseInt(d3.event.pageY-document.getElementById("svg0").getBoundingClientRect().y) - 3;
-		focus_y.attr("y1", dy).attr("y2", dy);
-		focus_x.attr("x1", dx).attr("x2", dx);
-		labeltime.text(new Date(timemin + (dx - 10) / rectStep * step)).toLocaleString().replace(" ","-");
-	});
+						.text("");
+	//鼠标跟随 + 拖拽选择
+	svg.on("mousedown",function(){
+			var dx = parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x);
+			if (dx>=-18 && dx <=12) {
+				dragging = "left";
+			}
+			else {
+				dx = parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x
+						-d3.select("#area").attr("width"));
+				if (dx>=-12 && dx <=18)
+					dragging = "right";
+				else {
+					if (dx < -12 && parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x) > 12)
+						dragging = "self";
+					else
+						return;
+				}
+			}
+			d3.select("#area")
+				.transition()
+				.duration(50)
+				.attr("fill","rgba(0,120,200,0.4)");
+			defa = dragging=="self" ? parseInt(d3.event.pageX-document.getElementById("area").getBoundingClientRect().x) : dx;
+		})
+		.on("mousemove",function(){
+			var dx = parseInt(d3.event.pageX-document.getElementById("svg0").getBoundingClientRect().x) - 3;
+			var dy = parseInt(d3.event.pageY-document.getElementById("svg0").getBoundingClientRect().y) - 3;
+			if (dx >= s_1 && dx <= s_2 && dy >= 10 && dy <= height-10) {
+				focus_y.attr("y1", dy).attr("y2", dy);
+				focus_x.attr("x1", dx).attr("x2", dx);
+				labeltime.text(new Date(timemin + (dx - 10) / rectStep * step).toLocaleString().replace(" ","-"));
+			}
+			else
+				return;
+			if (dragging=="none")
+				return;
+			dx = parseInt(d3.event.pageX-document.getElementById("svg0").getBoundingClientRect().x) - defa;
+			if (dragging=="left") {
+				var del_x = dx - d3.select("#area").attr("x");
+				var width = d3.select("#area").attr("width") - del_x;
+				if (width < 40 || dx < s_1)
+					return;
+				d3.select("#area").attr("x", dx);
+				d3.select("#area").attr("width", width);
+			}
+			else if (dragging=="right") {
+				dx = dx - d3.select("#area").attr("x");
+				if (dx < 40 || dx+s_1 > s_2)
+					return;
+				d3.select("#area").transition().duration(50).attr("width", dx);
+			}
+			else if (dragging=="self") {
+				var width = d3.select("#area").attr("width");
+				if (dx <= s_1) {
+					dx = s_1;
+				}
+				if (parseInt(dx)+parseInt(width) >= s_2) {
+					dx = s_2 - parseInt(width);
+				}
+				d3.select("#area").attr("x", dx);
+			}
+			from_time = timemin + (d3.select("#area").attr("x") - 10) / rectStep * step;
+			to_time = timemin + (parseInt(d3.select("#area").attr("x")) + parseInt(d3.select("#area").attr("width")) - 10) / rectStep * step;
+			d3.select("#from_t").text(new Date(from_time).toLocaleString().replace(" ","-"));
+			d3.select("#to_t").text(new Date(to_time).toLocaleString().replace(" ","-"));
+			redraw();
+		})
+	d3.select("body").on("mouseup",function(){
+						d3.select("#area")
+							.transition()
+							.duration(50)
+							.attr("fill","rgba(0,100,220,0.2)");
+						dragging = "none";
+						defa = 0;
+					});
+	
+	d3.select("#interaction").append("p")
+						.style("color","white")
+						.attr("id","from_t")
+						.text(new Date(from_time).toLocaleString().replace(" ","-"));
+	d3.select("#interaction").append("p")
+						.style("color","white")
+						.attr("id","to_t")
+						.text(new Date(to_time).toLocaleString().replace(" ","-"));
+}
+
+//重绘地图
+function redraw() {
+	for (var i = 0; i < points.length; i++) {
+		if (points[i].t >= from_time && points[i].t <= to_time) {
+			$(".BMap_Marker").eq(parseInt(points.length)+parseInt(i)).css("visibility","visible");
+		}
+		else {
+			$(".BMap_Marker").eq(parseInt(points.length)+parseInt(i)).css("visibility","hidden");
+		}
+	}
 }
